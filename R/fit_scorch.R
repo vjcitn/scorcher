@@ -35,6 +35,14 @@
 #'   the best available accelerator (CUDA > MPS > CPU), or specify
 #'   \code{"cpu"}, \code{"cuda"}, or \code{"mps"} explicitly.
 #'
+#' @param pin_data Character or logical. Controls whether the entire dataset
+#'   is moved to the target device before training. \code{"auto"} (default)
+#'   pins data when training on a GPU device (CUDA or MPS) and skips pinning
+#'   on CPU. \code{TRUE} always pins; \code{FALSE} never pins. Pinning
+#'   eliminates per-batch CPU-to-GPU transfers and is the main remedy for
+#'   GPU/MPS being slower than CPU on small datasets. Requires all tensors to
+#'   fit in device memory; set to \code{FALSE} for large datasets.
+#'
 #' @param seed Optional integer seed used to make the training run more
 #'   reproducible.
 #'
@@ -85,6 +93,7 @@ fit_scorch <- function(scorch_model,
                        clip_grad     = NULL,
                        clip_params   = list(),
                        device        = "auto",
+                       pin_data      = "auto",
                        seed          = NULL,
                        ...) {
 
@@ -136,6 +145,26 @@ fit_scorch <- function(scorch_model,
   torch_device <- torch::torch_device(device_name)
 
   scorch_model$nn_model <- scorch_model$nn_model$to(device = torch_device)
+
+  #- Resolve pin_data: "auto" -> pin whenever the device is a GPU.
+  do_pin <- if (identical(pin_data, "auto")) {
+    device_name != "cpu"
+  } else {
+    isTRUE(pin_data)
+  }
+
+  #- Pre-load dataset tensors to device to eliminate per-batch CPU->GPU
+  #- transfers, which are the main reason MPS/CUDA can appear slower than
+  #- CPU for small datasets.
+  if (do_pin) {
+    ds <- scorch_model$dl$dataset
+    if (!is.null(ds$input) && !is.null(ds$output)) {
+      ds$input  <- lapply(ds$input,  function(t)
+        if (inherits(t, "torch_tensor")) t$to(device = torch_device) else t)
+      ds$output <- lapply(ds$output, function(t)
+        if (inherits(t, "torch_tensor")) t$to(device = torch_device) else t)
+    }
+  }
 
   normalize_batch <- function(batch) {
     if (!is.null(preprocess_fn)) {
@@ -195,7 +224,10 @@ fit_scorch <- function(scorch_model,
 
   for (epoch in seq_len(num_epochs)) {
 
-    total_loss <- 0
+    #- Accumulate loss as a tensor to avoid a GPU->CPU sync ($item()) on every
+    #- batch. The scalar is extracted once at the end of the epoch.
+    total_loss <- torch::torch_tensor(0, dtype = torch::torch_float(),
+                                      device = torch_device)
 
     coro::loop(for (batch in scorch_model$dl) {
 
@@ -280,12 +312,12 @@ fit_scorch <- function(scorch_model,
 
       optimizer$step()
 
-      total_loss <- total_loss + loss$item()
+      total_loss <- total_loss + loss$detach()
     })
 
-    if (verbose) {
+    avg_loss <- total_loss$item() / n_batches
 
-      avg_loss <- total_loss / n_batches
+    if (verbose) {
 
       message(sprintf("Epoch %2d/%2d -- avg loss: %.4f",
                       epoch, num_epochs, avg_loss))
@@ -293,7 +325,7 @@ fit_scorch <- function(scorch_model,
 
     history[[epoch]] <- data.frame(
       epoch = epoch,
-      loss = total_loss / n_batches,
+      loss = avg_loss,
       backend = "torch",
       device = device_name,
       stringsAsFactors = FALSE
