@@ -68,6 +68,8 @@ scorch_evaluate_predictions <- function(predictions,
     stop("`predictions` and `truth` must be torch tensors.", call. = FALSE)
   }
 
+  truth <- truth$to(device = predictions$device)
+
   value <- switch(
     metric,
     accuracy = {
