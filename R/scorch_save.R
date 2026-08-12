@@ -75,8 +75,8 @@
 #'       \item{\code{scorcher_version}}{Version of the scorcher package, or
 #'         \code{"dev"} if not yet installed.}
 #'       \item{\code{device}}{Device the model was on when saved
-#'         (\code{"cpu"} or \code{"cuda"}). Useful when transferring models
-#'         between a GPU cluster and a local laptop.}
+#'         (\code{"cpu"}, \code{"cuda"}, or \code{"mps"}). Useful when
+#'         transferring models between machines.}
 #'       \item{\code{os}}{Operating system (\code{"Linux"}, \code{"Darwin"},
 #'         \code{"Windows"}).}
 #'       \item{\code{include_optimizer}}{Logical flag recording whether the

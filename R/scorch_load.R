@@ -17,7 +17,7 @@
 #'   \code{\link{scorch_save}}.
 #'
 #' @param device Character string. Device to load the model onto. One of
-#'   \code{"cpu"} (default) or \code{"cuda"}. Use \code{"cpu"} when loading a
+#'   \code{"cpu"} (default), \code{"cuda"}, or \code{"mps"}. Use \code{"cpu"} when loading a
 #'   model trained on GPU onto a machine without a GPU (common workflow: train
 #'   on cluster, analyze on laptop).
 #'
@@ -65,12 +65,12 @@
 #'
 #' \strong{Device Handling}
 #'
-#' When loading a model saved on GPU (\code{"cuda"}) onto a CPU-only machine,
-#' use \code{device = "cpu"} (the default). The function handles the device
-#' transfer automatically via \code{nn_model$to(device)}. When loading onto a
-#' machine with a GPU, use \code{device = "cuda"} to place the model on the
-#' GPU immediately. If \code{"cuda"} is requested but unavailable, the function
-#' warns and falls back to CPU.
+#' When loading a model saved on GPU (\code{"cuda"} or \code{"mps"}) onto a
+#' CPU-only machine, use \code{device = "cpu"} (the default). The function
+#' handles the device transfer automatically via \code{nn_model$to(device)}.
+#' When loading onto a machine with an NVIDIA GPU, use \code{device = "cuda"};
+#' on Apple Silicon, use \code{device = "mps"}. If the requested device is
+#' unavailable, the function warns and falls back to CPU.
 #'
 #' \strong{Version Checking}
 #'
@@ -107,8 +107,11 @@
 #' # Load a model onto CPU
 #' model <- scorch_load("models/my_model.pt")
 #'
-#' # Load onto GPU
+#' # Load onto NVIDIA GPU
 #' model <- scorch_load("models/my_model.pt", device = "cuda")
+#'
+#' # Load onto Apple Silicon GPU
+#' model <- scorch_load("models/my_model.pt", device = "mps")
 #'
 #' # Load silently
 #' model <- scorch_load("models/my_model.pt", verbose = FALSE)
@@ -149,24 +152,31 @@ scorch_load <- function(path,
 
   if (!is.character(device) || length(device) != 1) {
 
-    stop("`device` must be a single character string ('cpu' or 'cuda').",
+    stop("`device` must be a single character string ('cpu', 'cuda', or 'mps').",
          call. = FALSE)
   }
 
-  if (!device %in% c("cpu", "cuda")) {
+  if (!device %in% c("cpu", "cuda", "mps")) {
 
-    stop("`device` must be 'cpu' or 'cuda'. Got: '", device, "'.",
+    stop("`device` must be 'cpu', 'cuda', or 'mps'. Got: '", device, "'.",
          call. = FALSE)
   }
 
-  #- If the user requests CUDA but it's not available (e.g., running on a
-  #- laptop without a GPU), fall back to CPU with a warning rather than
-  #- crashing. This is a common scenario when downloading a model trained
-  #- on a cluster to analyze locally.
+  #- If the user requests an accelerator that is not available, fall back to
+  #- CPU with a warning rather than crashing. Common when moving a model
+  #- trained on a cluster to a local machine.
 
   if (device == "cuda" && !torch::cuda_is_available()) {
 
     warning("CUDA requested but not available. Loading to CPU instead.",
+            call. = FALSE)
+
+    device <- "cpu"
+  }
+
+  if (device == "mps" && !torch::backends_mps_is_available()) {
+
+    warning("MPS requested but not available. Loading to CPU instead.",
             call. = FALSE)
 
     device <- "cpu"

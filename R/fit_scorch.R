@@ -32,8 +32,8 @@
 #'   \code{list(clip_value = 0.5)}.
 #'
 #' @param device Character. Device to train on. Use \code{"auto"} to select
-#'   CUDA when available and CPU otherwise, or specify \code{"cpu"} or
-#'   \code{"cuda"}.
+#'   the best available accelerator (CUDA > MPS > CPU), or specify
+#'   \code{"cpu"}, \code{"cuda"}, or \code{"mps"} explicitly.
 #'
 #' @param seed Optional integer seed used to make the training run more
 #'   reproducible.
@@ -48,7 +48,7 @@
 #'   \enumerate{
 #'     \item Iterates over batches from the attached dataloader.
 #'     \item Moves inputs and targets to the appropriate device
-#'       (CUDA if available, otherwise CPU).
+#'       (CUDA > MPS > CPU, depending on availability).
 #'     \item Computes predictions via the forward pass.
 #'     \item Computes loss -- either a single loss function or the
 #'       sum of per-output losses for multi-head models.
@@ -108,7 +108,9 @@ fit_scorch <- function(scorch_model,
   #- Detect or validate device.
 
   device_name <- if (identical(device, "auto")) {
-    if (torch::cuda_is_available()) "cuda" else "cpu"
+    if (torch::cuda_is_available()) "cuda"
+    else if (torch::backends_mps_is_available()) "mps"
+    else "cpu"
   } else {
     as.character(device)
   }
@@ -117,9 +119,15 @@ fit_scorch <- function(scorch_model,
     stop("CUDA was requested but is not available.", call. = FALSE)
   }
 
+  if (device_name == "mps" && !torch::backends_mps_is_available()) {
+    stop("MPS was requested but is not available.", call. = FALSE)
+  }
+
   if (verbose) {
     if (device_name == "cuda") {
       message("CUDA available. Training on GPU.")
+    } else if (device_name == "mps") {
+      message("Apple MPS available. Training on GPU.")
     } else {
       message("Training on CPU.")
     }

@@ -47,9 +47,11 @@ SinusoidalEmbedding <- nn_module(
     half_size <- self$size %/% 2
 
     #- 10000 is the base frequency from Vaswani et al. "Attention Is All You Need".
-    emb <- torch_log(torch_tensor(10000.0)) / max(half_size - 1, 1)
+    #- Use x$device so these intermediate tensors are on the same device as the
+    #- input (CPU, CUDA, or MPS) rather than always defaulting to CPU.
+    emb <- torch_log(torch_tensor(10000.0, device = x$device)) / max(half_size - 1, 1)
 
-    emb <- torch_exp(-emb * torch_arange(0, half_size - 1))
+    emb <- torch_exp(-emb * torch_arange(0, half_size - 1, device = x$device))
 
     emb <- x$unsqueeze(-1) * emb$unsqueeze(1)
 
