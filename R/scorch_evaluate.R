@@ -24,7 +24,18 @@ scorch_predict <- function(scorch_model, input) {
 
   model$eval()
 
+  #- Detect the device the model lives on from its first parameter, then move
+  #- all input tensors to that device so predict works after GPU/MPS training.
+  params <- model$parameters
+  model_device <- if (length(params) > 0) params[[1]]$device else NULL
+
   input <- scorch_as_named_tensor_list(input, default_name = "input")
+
+  if (!is.null(model_device)) {
+    input <- lapply(input, function(x) {
+      if (inherits(x, "torch_tensor")) x$to(device = model_device) else x
+    })
+  }
 
   torch::with_no_grad({
     if (length(scorch_model$inputs) == 1) {
