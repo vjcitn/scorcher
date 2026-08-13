@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   comment = "#>",
-  eval = FALSE
+  eval = TRUE
 )
 ```
 
@@ -40,10 +40,11 @@ true digit labels, and checking both accuracy and example predictions.
 Before we begin, ensure that you have the necessary packages installed. 
 You can install them using the following commands:
 
-```{r install, eval = FALSE}
-install.packages("torch")
-install.packages("torchvision")
-install.packages("scorcher")
+```{r install, eval = TRUE}
+if (!requireNamespace("torch")) install.packages("torch")
+if (!requireNamespace("torchvision")) install.packages("torchvision")
+if (!requireNamespace("scorcher")) install.packages("scorcher")
+if (!requireNamespace("luz")) install.packages("luz")
 ```
 
 Additionally, you'll need to install the system dependencies used by R `torch`.
@@ -85,7 +86,7 @@ y_train <- torch_tensor(train_data$targets, dtype = torch_long())
 Before modeling, it is useful to inspect a few images to confirm that the data
 were loaded and reshaped as expected.
 
-```{r plt1}
+```{r plt1, fig.width=5, fig.height=5}
 # Visualizing the MNIST training data
 
 par(mfrow = c(2, 2), mar = c(1, 1, 1, 1), pty = "s")
@@ -206,7 +207,7 @@ luz::evaluate(luz_fit, data = luz_test_dl)
 A few individual predictions make the numeric accuracy easier to interpret.
 The title above each image shows the digit predicted by the fitted model.
 
-```{r}
+```{r fig.width=5, fig.height=5}
 # Visualizing some of the predictions
 
 par(mfrow = c(2, 2), mar = c(1, 1, 1.5, 1), pty = "s")
